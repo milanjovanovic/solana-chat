@@ -211,15 +211,18 @@ pub struct AccountMetadata {
 
 impl AccountMetadata {
     const ACCOUNT_METADATA_BASE_SIZE: usize = (mem::size_of::<u32>() * 3) + mem::size_of::<u8>();
+    // FIXME, set next_free_index to account_metadata.size()
     pub fn new(account_name: &str) -> Self {
         let name = account_name.to_string();
-        AccountMetadata {
+        let mut account_metadata = AccountMetadata {
             initialized: 1,
             next_free_index: 0,
             last_message_id: 0,
             account_name_len: name.len() as u32,
             account_name: name,
-        }
+        };
+        account_metadata.next_free_index = account_metadata.size() as u32;
+        account_metadata
     }
 
     pub fn calculate_size_from_buffer(data: &[u8]) -> usize {
