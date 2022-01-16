@@ -12,6 +12,8 @@ mod chat;
 
 use chat::{open_account, receive_messages, send_message};
 
+use crate::chat::infer_chat_address;
+
 #[derive(Debug, Clone)]
 struct CustomError<'a>(&'a str);
 
@@ -83,6 +85,9 @@ fn main() -> Result<(), Box<dyn Error>> {
         "delete" => {
             panic!("Not implemented");
         }
+        "infer_chat_address" => infer_chat_address(&rpc_client, &program_kp, &user_kp),
         _ => panic!("Unknown option !"),
     }
 }
+
+

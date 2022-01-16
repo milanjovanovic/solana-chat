@@ -25,10 +25,13 @@ fn receive_messages(
         last_message_id += 1;
     }
 
-    let messages_size = messages.iter().map(|c| c.size()).sum();
+    let messages_size: usize = messages.iter().map(|c| c.size()).sum();
     let start_index = account_metadata.next_free_index as usize;
 
-    serialize_messages(messages, &mut account_data[start_index..messages_size])?;
+    serialize_messages(
+        messages,
+        &mut account_data[start_index..start_index + messages_size],
+    )?;
 
     account_metadata.next_free_index = (start_index + messages_size) as u32;
     account_metadata.last_message_id = messages.last().unwrap().id;

@@ -32,10 +32,7 @@ fn create_chat_instruction(
     ))
 }
 
-fn create_chat_account_pubkey(
-    user_pk: &Pubkey,
-    program_pk: &Pubkey,
-) -> Result<Pubkey, PubkeyError> {
+fn infer_chat_account_pubkey(user_pk: &Pubkey, program_pk: &Pubkey) -> Result<Pubkey, PubkeyError> {
     Pubkey::create_with_seed(user_pk, SEED, program_pk)
 }
 
@@ -46,7 +43,7 @@ pub fn open_account(
     account_name: &str,
 ) -> Result<(), Box<dyn Error>> {
     let account_pub_key =
-        create_chat_account_pubkey(&from_user.pubkey(), &program_keypair.pubkey())?;
+        infer_chat_account_pubkey(&from_user.pubkey(), &program_keypair.pubkey())?;
 
     let rent = rpc_client.get_minimum_balance_for_rent_exemption(ACCOUNT_SIZE as usize)?;
 
@@ -114,18 +111,30 @@ pub fn receive_messages(
     _last_message_id: Option<u32>,
 ) -> Result<(), Box<dyn Error>> {
     let user_char_account =
-        create_chat_account_pubkey(&from_user.pubkey(), &program_keypair.pubkey())?;
+        infer_chat_account_pubkey(&from_user.pubkey(), &program_keypair.pubkey())?;
 
     let data = rpc_client.get_account_data(&user_char_account)?;
 
-    if let Ok((account_metadata, _message)) = deserialize_account_data(&data[..]) {
+    if let Ok((account_metadata, messages)) = deserialize_account_data(&data[..]) {
         println!("{:?}", account_metadata);
+        println!("{:?}", messages);
     } else {
         println!("account is empty");
     }
 
     println!("size of data: {}", data.len());
 
+    Ok(())
+}
+
+pub fn infer_chat_address(
+    rpc_client: &RpcClient,
+    program_keypair: &Keypair,
+    from_user: &Keypair,
+) -> Result<(), Box<dyn Error>> {
+    let from_user_chat_pk =
+        infer_chat_account_pubkey(&from_user.pubkey(), &program_keypair.pubkey())?;
+    println!("Address: {}", from_user_chat_pk);
     Ok(())
 }
 
@@ -136,21 +145,43 @@ pub fn send_message(
     to_user: &Pubkey,
     msg: String,
 ) -> Result<(), Box<dyn Error>> {
-    // // FIXME, from_user should be generated with seed
-    // // this from_user is system account that pays for transaction
-    // let from_user_pubkey =
-    //     create_chat_account_pubkey(&from_user.pubkey(), &program_keypair.pubkey())?;
-    // let to_account = rpc_client.get_account(to_user)?;
-    // let message = Message::new(0, from_user.pubkey(), msg);
-    // let mut data = vec![0; message.size()];
-    // message.serialize(&mut data[..])?;
+    // FIXME, from_user should be generated with seed
+    // this from_user is system account that pays for transaction
+    let from_user_chat_pk =
+        infer_chat_account_pubkey(&from_user.pubkey(), &program_keypair.pubkey())?;
+    let _to_account = rpc_client.get_account(to_user)?;
+    let message = Message::new(0, from_user.pubkey(), msg);
 
-    // let instruction = create_chat_instruction(
-    //     program_keypair.pubkey(),
-    //     from_user,
-    //     new_account,
-    //     chat_instruction,
-    // );
+    let chat_instruction = ChatInstruction::SendMessages {
+        messages: vec![message],
+    };
+
+    let instruction = create_chat_instruction(
+        program_keypair.pubkey(),
+        from_user.pubkey(),
+        *to_user,
+        chat_instruction,
+    )?;
+
+    let hash = rpc_client.get_latest_blockhash()?;
+
+    let transaction = Transaction::new_signed_with_payer(
+        &[instruction],
+        Some(&from_user.pubkey()),
+        &[from_user],
+        hash,
+    );
+
+    match rpc_client.send_and_confirm_transaction_with_spinner(&transaction) {
+        Ok(sig) => {
+            println!("Transaction successed !");
+            println!("Signature: {}", sig);
+        }
+        Err(err) => {
+            println!("Got Error: {:?}", err);
+            return Err(Box::new(err));
+        }
+    }
 
     Ok(())
 }
